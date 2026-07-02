@@ -1,0 +1,132 @@
+.badge {
+  --ring: var(--tier-common);
+  --badge-size: 96px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.badge.tier-common {
+  --ring: var(--tier-common);
+}
+.badge.tier-uncommon {
+  --ring: var(--tier-uncommon);
+}
+.badge.tier-rare {
+  --ring: var(--tier-rare);
+}
+.badge.tier-mystery {
+  --ring: var(--tier-mystery);
+}
+
+.badge.clickable {
+  cursor: pointer;
+}
+.badge.clickable:active .badge-ring {
+  transform: scale(0.96);
+}
+
+.badge-ring {
+  position: relative;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, 0.18), transparent 55%),
+    linear-gradient(160deg, var(--ring), color-mix(in srgb, var(--ring) 55%, #10111f));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ring) 70%, transparent),
+    0 8px 22px rgba(0, 0, 0, 0.45),
+    inset 0 2px 6px rgba(255, 255, 255, 0.25);
+  transition: transform 0.12s ease;
+}
+
+/* inner disc */
+.badge-ring::after {
+  content: "";
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background: linear-gradient(160deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35));
+  box-shadow: inset 0 1px 3px rgba(255, 255, 255, 0.2);
+}
+
+.badge-glyph {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--badge-size) * 0.42);
+  line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  z-index: 2;
+}
+
+.badge-shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--badge-size);
+  height: var(--badge-size);
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 3;
+  pointer-events: none;
+}
+.badge-shine::before {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -80%;
+  width: 60%;
+  height: 220%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  transform: rotate(20deg);
+}
+
+.badge-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  max-width: calc(var(--badge-size) + 24px);
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/* Locked / undiscovered */
+.badge.locked .badge-ring {
+  background: linear-gradient(160deg, #3a3d55, #23263c);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.05),
+    inset 0 2px 6px rgba(255, 255, 255, 0.06);
+  filter: grayscale(1);
+}
+.badge.locked .badge-glyph {
+  opacity: 0.35;
+  filter: none;
+  color: var(--muted);
+}
+.badge.locked .badge-shine {
+  display: none;
+}
+.badge.locked .badge-label {
+  color: var(--muted);
+  letter-spacing: 2px;
+}

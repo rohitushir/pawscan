@@ -1,0 +1,40 @@
+.collection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.collection-head {
+  margin-bottom: 18px;
+}
+
+.collection-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 4px 0 2px;
+}
+.collection-sub {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--card);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transition: width 0.5s ease;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px 8px;
+  padding: 8px 0 12px;
+  overflow-y: auto;
+}
