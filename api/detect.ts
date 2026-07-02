@@ -259,6 +259,12 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     // Log the real error server-side; return a generic message so we don't
     // leak upstream/internal details (or key-related messages) to the client.
     console.error("[detect] detection failed:", err);
-    res.status(502).json({ error: "Detection failed. Please try again." });
+    // Opt-in diagnostic: set DETECT_DEBUG=1 in the env to include the real
+    // error in the response while troubleshooting. Turn it OFF for production.
+    const detail = err instanceof Error ? err.message : String(err);
+    res.status(502).json({
+      error: "Detection failed. Please try again.",
+      ...(process.env.DETECT_DEBUG === "1" ? { detail } : {}),
+    });
   }
 }
