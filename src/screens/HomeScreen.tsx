@@ -41,6 +41,20 @@ export function HomeScreen({ onScanned }: HomeScreenProps) {
 
   useEffect(() => () => stopWebCamera(), []);
 
+  // Attach the stream once the <video> is actually mounted. Setting srcObject
+  // inside startWebCamera doesn't work: setCameraActive(true) is what mounts the
+  // element, so videoRef.current is still null in that same tick.
+  useEffect(() => {
+    if (!cameraActive) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    // Autoplay is allowed here (muted + playsInline + user-initiated), but
+    // ignore rejections so a transient play() error doesn't surface as a crash.
+    void video.play().catch(() => {});
+  }, [cameraActive]);
+
   function stopWebCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -101,11 +115,7 @@ export function HomeScreen({ onScanned }: HomeScreenProps) {
         },
       });
       streamRef.current = stream;
-      setCameraActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      setCameraActive(true); // the effect above attaches the stream once mounted
     } catch (err) {
       const message = err instanceof Error ? err.message : "Camera permission was denied";
       setError(message);
@@ -113,10 +123,32 @@ export function HomeScreen({ onScanned }: HomeScreenProps) {
     }
   }
 
+  function waitForVideoReady(video: HTMLVideoElement, timeoutMs = 4000): Promise<boolean> {
+    if (video.videoWidth && video.videoHeight) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const done = (ok: boolean) => {
+        clearTimeout(timer);
+        video.removeEventListener("loadedmetadata", onReady);
+        video.removeEventListener("loadeddata", onReady);
+        resolve(ok);
+      };
+      const onReady = () => done(!!(video.videoWidth && video.videoHeight));
+      const timer = setTimeout(() => done(!!(video.videoWidth && video.videoHeight)), timeoutMs);
+      video.addEventListener("loadedmetadata", onReady);
+      video.addEventListener("loadeddata", onReady);
+    });
+  }
+
   async function captureWebScan() {
     const video = videoRef.current;
-    if (!video || !streamRef.current || !video.videoWidth || !video.videoHeight) {
+    if (!video || !streamRef.current) {
       setError("Camera is not ready yet");
+      return;
+    }
+
+    // The preview may still be loading its first frame right after permission.
+    if (!(await waitForVideoReady(video))) {
+      setError("Camera is not ready yet — give it a second and try again");
       return;
     }
 
