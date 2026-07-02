@@ -20,12 +20,21 @@ const MODEL = process.env.PAWSCAN_MODEL || "claude-opus-4-8";
 // (~4.5M chars ≈ 3.3MB decoded) also sits under Vercel's request-body limit.
 const MAX_IMAGE_BASE64_CHARS = Number(process.env.MAX_IMAGE_BASE64_CHARS || 4_500_000);
 
-// Best-effort in-memory per-IP rate limit. NOTE: serverless instances don't
-// share memory, so this bounds a single warm instance rather than the whole
-// deployment. For hard, global limits back this with a shared store (Upstash /
-// Vercel KV) keyed the same way.
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 20);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
+
+// Optional shared secret. When PAWSCAN_APP_TOKEN is set, callers must send a
+// matching `x-app-token` header. NOTE: a mobile bundle can be extracted, so a
+// baked-in token is a low-friction deterrent, not strong auth — it only raises
+// the bar for casual abuse on top of the rate limit. Leave unset to disable.
+const APP_TOKEN = process.env.PAWSCAN_APP_TOKEN || "";
+
+// Upstash Redis (REST) gives a real deployment-wide limit that survives across
+// serverless instances. When these are unset we fall back to the in-memory
+// limiter below (per warm instance only). Any Upstash error also fails over to
+// in-memory so a Redis outage can't take the endpoint down.
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || "";
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
 
 const rateHits = new Map<string, { count: number; resetAt: number }>();
 
@@ -36,7 +45,20 @@ function clientKey(req: Req): string {
   return ip || "unknown";
 }
 
-function rateLimit(key: string): { ok: boolean; retryAfter: number } {
+function header(req: Req, name: string): string {
+  const v = req.headers?.[name];
+  return (Array.isArray(v) ? v[0] : v) ?? "";
+}
+
+// Constant-time-ish compare so token checks don't leak length/prefix via timing.
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function inMemoryRateLimit(key: string): { ok: boolean; retryAfter: number } {
   const now = Date.now();
 
   // Opportunistically prune expired entries so the map can't grow unbounded.
@@ -56,6 +78,51 @@ function rateLimit(key: string): { ok: boolean; retryAfter: number } {
   }
   entry.count += 1;
   return { ok: true, retryAfter: 0 };
+}
+
+// Fixed-window counter in Upstash: INCR a per-window bucket key and give it a
+// TTL. Returns null (not a decision) if Upstash isn't configured or errors, so
+// the caller can fall back to the in-memory limiter.
+async function upstashRateLimit(
+  key: string,
+): Promise<{ ok: boolean; retryAfter: number } | null> {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+
+  const now = Date.now();
+  const windowSec = Math.max(1, Math.round(RATE_LIMIT_WINDOW_MS / 1000));
+  const bucket = Math.floor(now / RATE_LIMIT_WINDOW_MS);
+  const redisKey = `pawscan:rl:${key}:${bucket}`;
+
+  try {
+    const resp = await fetch(`${UPSTASH_URL}/pipeline`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${UPSTASH_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        ["INCR", redisKey],
+        ["EXPIRE", redisKey, String(windowSec), "NX"],
+      ]),
+      // Don't let a slow Redis stall the request; fail over instead.
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!resp.ok) throw new Error(`Upstash HTTP ${resp.status}`);
+
+    const results = (await resp.json()) as Array<{ result?: number; error?: string }>;
+    const count = results?.[0]?.result;
+    if (typeof count !== "number") throw new Error("Upstash: unexpected pipeline result");
+
+    const retryAfter = windowSec - Math.floor((now % RATE_LIMIT_WINDOW_MS) / 1000);
+    return { ok: count <= RATE_LIMIT_MAX, retryAfter: Math.max(1, retryAfter) };
+  } catch (err) {
+    console.error("[detect] Upstash rate-limit failed, using in-memory:", err);
+    return null;
+  }
+}
+
+async function rateLimit(key: string): Promise<{ ok: boolean; retryAfter: number }> {
+  return (await upstashRateLimit(key)) ?? inMemoryRateLimit(key);
 }
 
 const ALLOWED_MEDIA = new Set([
@@ -117,7 +184,13 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     return;
   }
 
-  const limit = rateLimit(clientKey(req));
+  // Optional shared-token gate (only enforced when PAWSCAN_APP_TOKEN is set).
+  if (APP_TOKEN && !safeEqual(header(req, "x-app-token"), APP_TOKEN)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const limit = await rateLimit(clientKey(req));
   if (!limit.ok) {
     res.setHeader("Retry-After", String(limit.retryAfter));
     res.status(429).json({ error: "Too many scans. Please wait a moment and try again." });

@@ -14,9 +14,15 @@ function assertDetectEndpoint() {
 
 async function postDetection(imageBase64: string, mediaType: string): Promise<DetectResult> {
   assertDetectEndpoint();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  // Optional shared token — must match PAWSCAN_APP_TOKEN on the server. This is
+  // baked into the bundle, so it deters casual abuse rather than being a secret.
+  const appToken = import.meta.env.VITE_PAWSCAN_APP_TOKEN;
+  if (appToken) headers["x-app-token"] = appToken;
+
   const res = await fetch(DETECT_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ imageBase64, mediaType }),
   });
 

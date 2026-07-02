@@ -35,7 +35,7 @@ createServer(async (req, res) => {
       res.end(JSON.stringify(body));
     },
   };
-  await handler({ method: req.method, body: rawBody }, shim);
+  await handler({ method: req.method, body: rawBody, headers: req.headers }, shim);
 }).listen(PORT, () => {
   console.log(`[dev-proxy] /api/detect on http://localhost:${PORT}`);
   console.log(`[dev-proxy] now run:  DETECT_PROXY=http://localhost:${PORT} npm run dev`);

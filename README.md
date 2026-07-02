@@ -72,3 +72,6 @@ variables in the project settings. `vercel.json` handles the SPA rewrite and the
 | `ANTHROPIC_API_KEY` | Required. Used only by the serverless proxy.              |
 | `PAWSCAN_MODEL`     | Optional. Vision model (default `claude-opus-4-8`). Cost lever: `claude-haiku-4-5` / `claude-sonnet-5`. |
 | `VITE_DETECT_API_URL` | Required for native iOS builds. Full URL to the deployed `/api/detect` endpoint. |
+| `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` | Optional. Per-IP rate limit (default 20 / 60000 ms). |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Optional. Enables a global (cross-instance) rate limit via Upstash Redis. Falls back to per-instance in-memory limiting when unset or on error. |
+| `PAWSCAN_APP_TOKEN` + `VITE_PAWSCAN_APP_TOKEN` | Optional. Shared token; when both are set the app sends `x-app-token` and the API rejects mismatches. Deters casual abuse (the token ships in the client bundle). |
