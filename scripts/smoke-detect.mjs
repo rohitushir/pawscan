@@ -5,7 +5,8 @@
 //   DETECT_URL=https://your-app.vercel.app/api/detect node scripts/smoke-detect.mjs
 //
 // If PAWSCAN_APP_TOKEN is set in the env, it's sent as the x-app-token header.
-// With no image, a 1x1 PNG is sent — the pipeline should still return a valid
+// With no image, a 96x96 solid PNG is sent (Anthropic's vision API rejects
+// tiny images like 1x1) — the pipeline should still return a valid
 // (low-confidence "Mystery Mix") shape, which is enough to prove it works.
 import { readFileSync } from "node:fs";
 
@@ -18,13 +19,13 @@ if (!endpoint) {
 const imagePath = process.argv[3];
 const appToken = process.env.PAWSCAN_APP_TOKEN || process.env.VITE_PAWSCAN_APP_TOKEN;
 
-// 1x1 transparent PNG fallback.
-const ONE_PX_PNG =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+// 96x96 solid-color PNG fallback (large enough for the vision API to accept).
+const FALLBACK_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAIAAABt+uBvAAAApUlEQVR4nO3QQQ0AIBDAsPMfRCACgTjgyx5NJmDpnL30aL4fxAMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAQIUDhAgQIAAhQMECBAgQOEAAQIECFA4QIAAAfrZBWocg+7TpGB0AAAAAElFTkSuQmCC";
 
 const imageBase64 = imagePath
   ? readFileSync(imagePath).toString("base64")
-  : ONE_PX_PNG;
+  : FALLBACK_PNG;
 const mediaType = imagePath?.match(/\.(png)$/i)
   ? "image/png"
   : imagePath?.match(/\.(webp)$/i)
@@ -54,7 +55,7 @@ async function post() {
 }
 
 console.log(`→ Endpoint: ${endpoint}`);
-console.log(`→ Image:    ${imagePath || "(built-in 1x1 png)"}`);
+console.log(`→ Image:    ${imagePath || "(built-in 96x96 png)"}`);
 console.log(`→ Token:    ${appToken ? "sending x-app-token" : "none"}\n`);
 
 // --- Test 1: a single detection request ------------------------------------
